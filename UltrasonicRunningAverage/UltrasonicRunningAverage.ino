@@ -2,11 +2,13 @@ int avgC = 0; // count to keep track of the running averages
 const int avgCSize = 5; // size of the running averages
 
 // For Ultrasonic Sensors
-int usPins[] = {5,6,3}; // pins for the ultrasonic
+int usPins[] = {6,5,3}; // pins for the ultrasonic
 const int usSize = 3; // number of ultrasonics
 long  us[usSize]; // Array of ultrasonic readings
 long usArr[usSize][avgCSize]; // Array of past us readings
 long usMed[usSize]; // Array of median ultrasonic readings
+
+int tooClose = 500;
 
 void setup() {
   Serial.begin(9600); //Opens serial connection at 115200bps. 
@@ -21,7 +23,7 @@ void loop() {
   usMedCalc();
   printValues(); // Method to print sensor values to serial
   avgC = (avgC+1)%avgCSize;
-  delay(10);
+  delay(5);
 }
 
 void readUS() {
@@ -75,7 +77,12 @@ void usMedCalc() {
 //      Serial.print(", ");
     }
 //    Serial.println();
-    usMed[i] = med5(usArr[i][0], usArr[i][1], usArr[i][2], usArr[i][3], usArr[i][4]);
+    if (us[i] > tooClose) {
+      usMed[i] = med5(usArr[i][0], usArr[i][1], usArr[i][2], usArr[i][3], usArr[i][4]);
+    }
+    else {
+      usMed[i] = us[i];
+    }
   }
 }
 
