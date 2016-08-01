@@ -1,5 +1,5 @@
 /*
- * This code tests all six sensors (3 ultrasonics, 3 LIDARs)
+ * This code works with all six sensors (3 ultrasonics, 3 LIDARs) and the hall effect sensor controller
  * The pin order is Front, Right, Left
  */
 
@@ -19,15 +19,20 @@ int lid[lSize]; // Array of LIDAR readings
 int lArr[lSize][avgCSize]; // Array of past LIDAR readings
 int lMed[lSize]; // Array of median LIDAR readings
 int timeout = 1000; // time before stopping poll of values in case ack is not received 
-int lClose = 50; // value at which to override median calculation for immediate action
-
 // For Ultrasonic Sensors
 int usPins[] = {3,5,6}; // pins for the ultrasonic
 const int usSize = sizeof(usPins)/sizeof(*usPins);; // number of ultrasonics
 long  us[usSize]; // Array of ultrasonic readings
 long usArr[usSize][avgCSize]; // Array of past us readings
 long usMed[usSize]; // Array of median ultrasonic readings
-int usClose = 50;
+
+int tooClose = 100; // Bypass the median calculation, so no delay when displaying the too close notification
+int brake = 50; // Distance at which to start braking
+
+// For the Hall Effect Sensor + Motor Control
+int hsout = 11;
+int hsin = 0;
+float speedFactor = .75; // 1 mostly mirrors the input, multiplied by 1.2 later on
 
 void setup() {
   Serial.begin(115200); //Opens serial connection at 115200bps. 
@@ -45,6 +50,10 @@ void setup() {
     Serial.print(usPins[j]);
   }
   Serial.println();
+  pinMode(hsout, OUTPUT);
+  if (speedFactor > 1) {
+    speedFactor = 1;
+  }
 }
 
 void loop() {
@@ -52,6 +61,7 @@ void loop() {
   readUS(); // Method to read the values of the ultrasonic sensor
   lMedCalc();
   usMedCalc();
+  motorSet();
   printValues(); // Method to print sensor values to serial
   avgC = (avgC+1)%avgCSize;
   delay(5);
@@ -176,7 +186,7 @@ int med5(int a0, int a1, int a2, int a3, int a4) { // super efficient median of 
 void usMedCalc() {
   for (int i=0; i<usSize; i++) {
     usArr[i][avgC] = us[i];
-    if (us[i] > usClose) {
+    if (us[i] > tooClose) {
       usMed[i] = med5(usArr[i][0], usArr[i][1], usArr[i][2], usArr[i][3], usArr[i][4]);
     }
     else {
@@ -188,7 +198,7 @@ void usMedCalc() {
 void lMedCalc() {
   for (int i=0; i<lSize; i++) {
     lArr[i][avgC] = lid[i];
-    if (lid[i] > lClose) {
+    if (lid[i] > tooClose) {
       lMed[i] = med5(lArr[i][0], lArr[i][1], lArr[i][2], lArr[i][3], lArr[i][4]);
     }
     else {
@@ -202,14 +212,34 @@ void printValues() {
     Serial.print(lMed[i]);
     Serial.print(",");
   }
-  Serial.print("\t");
+  // Serial.print("\t");
   for (int i=0; i<usSize; i++) {
 //    Serial.print("Ultrasonic ");
 //    Serial.print(i);
 //    Serial.print(": ");
     Serial.print(usMed[i]);
-    Serial.print(", ");
+    Serial.print(",");
   }
   Serial.println();
 }
+
+void motorSet() {
+  /* bool braking = false;
+  for (int i=0; i<lSize; i++) {
+    if (lMed[i] < brake) {
+      braking = true;
+    }
+  }
+  for (int i=0; i<usSize; i++) {
+    if (usMed[i] < brake) {
+      braking = true;
+    }
+  }
+  if (!braking) { */ // To stop the kart with all ultrasonics
+  if (usMed[0] > brake && lMed[0] > brake) {
+    analogWrite(hsout, (int) (analogRead(hsin)*speedFactor + 320 - 300*speedFactor)*1.2/4);
+    // Serial.println(analogRead(hsin));
+  }
+}
+
 
