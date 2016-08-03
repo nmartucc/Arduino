@@ -19,6 +19,7 @@ int lid[lSize]; // Array of LIDAR readings
 int lArr[lSize][avgCSize]; // Array of past LIDAR readings
 int lMed[lSize]; // Array of median LIDAR readings
 int timeout = 1000; // time before stopping poll of values in case ack is not received 
+
 // For Ultrasonic Sensors
 int usPins[] = {3,5,6}; // pins for the ultrasonic
 const int usSize = sizeof(usPins)/sizeof(*usPins);; // number of ultrasonics
@@ -32,10 +33,14 @@ int brake = 50; // Distance at which to start braking
 // For the Hall Effect Sensor + Motor Control
 int hsout = 11;
 int hsin = 0;
-float speedFactor = .75; // 1 mostly mirrors the input, multiplied by 1.2 later on
+float speedFactor = 1.0; // multiplied by maxSpeed later on
+float maxSpeed = .8; // 1.2 mirrors original kart output
+
+#include <Servo.h>
 
 void setup() {
   Serial.begin(115200); //Opens serial connection at 115200bps. 
+  Serial.setTimeout(5); //Sets the timeout at 10 ms so it doesn't disrupt other code
   I2c.begin(); // Opens & joins the irc bus as master
   delay(100); // Waits to make sure everything is powered up before sending or receiving data  
   I2c.timeOut(50); // Sets a timeout to ensure no locking up of sketch if I2C communication fails
@@ -224,6 +229,13 @@ void printValues() {
 }
 
 void motorSet() {
+  int serialVal = 0;
+  while (Serial.available() > 0) {
+    serialVal = Serial.parseInt();
+  }
+  if (serialVal > 0) {
+    speedFactor = ((float) serialVal)/100.0;
+  }
   /* bool braking = false;
   for (int i=0; i<lSize; i++) {
     if (lMed[i] < brake) {
@@ -236,8 +248,8 @@ void motorSet() {
     }
   }
   if (!braking) { */ // To stop the kart with all ultrasonics
-  if (usMed[0] > brake && lMed[0] > brake) {
-    analogWrite(hsout, (int) (analogRead(hsin)*speedFactor + 320 - 300*speedFactor)*1.2/4);
+  if (usMed[0] > brake && lMed[0] > brake) { // To stop the kar with only front sensors
+    analogWrite(hsout, (int) (analogRead(hsin)*speedFactor + 320 - 300*speedFactor)*maxSpeed/4);
     // Serial.println(analogRead(hsin));
   }
 }
