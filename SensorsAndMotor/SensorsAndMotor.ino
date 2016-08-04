@@ -28,13 +28,15 @@ long usArr[usSize][avgCSize]; // Array of past us readings
 long usMed[usSize]; // Array of median ultrasonic readings
 
 int tooClose = 100; // Bypass the median calculation, so no delay when displaying the too close notification
-int brake = 50; // Distance at which to start braking
+int brake = 200; // Distance at which to start braking
 
 // For the Hall Effect Sensor + Motor Control
 int hsout = 11;
 int hsin = 0;
 float speedFactor = 1.0; // multiplied by maxSpeed later on
-float maxSpeed = .8; // 1.2 mirrors original kart output
+float maxSpeed = .5; // 1.2 mirrors original kart output
+
+int buttonPin = 9;
 
 #include <Servo.h>
 
@@ -43,7 +45,7 @@ void setup() {
   Serial.setTimeout(5); //Sets the timeout at 10 ms so it doesn't disrupt other code
   I2c.begin(); // Opens & joins the irc bus as master
   delay(100); // Waits to make sure everything is powered up before sending or receiving data  
-  I2c.timeOut(50); // Sets a timeout to ensure no locking up of sketch if I2C communication fails
+  I2c.timeOut(5); // Sets a timeout to ensure no locking up of sketch if I2C communication fails
 
   for (int i = 0; i < lSize; i++){
     pinMode(lPins[i], OUTPUT); // Pin to [i] LIDAR-Lite Power Enable line
@@ -56,9 +58,11 @@ void setup() {
   }
   Serial.println();
   pinMode(hsout, OUTPUT);
-  if (speedFactor > 1) {
-    speedFactor = 1;
+  if (maxSpeed > 1) {
+    maxSpeed = 1;
   }
+
+  pinMode(buttonPin, INPUT);
 }
 
 void loop() {
@@ -69,7 +73,7 @@ void loop() {
   motorSet();
   printValues(); // Method to print sensor values to serial
   avgC = (avgC+1)%avgCSize;
-  delay(5);
+  //delay(5);
 }
 
 void readLid() {
@@ -203,7 +207,7 @@ void usMedCalc() {
 void lMedCalc() {
   for (int i=0; i<lSize; i++) {
     lArr[i][avgC] = lid[i];
-    if (lid[i] > tooClose) {
+    if (lid[i] > tooClose || lid[i] < 10) {
       lMed[i] = med5(lArr[i][0], lArr[i][1], lArr[i][2], lArr[i][3], lArr[i][4]);
     }
     else {
@@ -225,14 +229,12 @@ void printValues() {
     Serial.print(usMed[i]);
     Serial.print(",");
   }
-  Serial.println();
+  Serial.print(!digitalRead(buttonPin));
+  Serial.println(',');
 }
 
 void motorSet() {
-  int serialVal = 0;
-  while (Serial.available() > 0) {
-    serialVal = Serial.parseInt();
-  }
+  int serialVal = Serial.parseInt();
   if (serialVal > 0) {
     speedFactor = ((float) serialVal)/100.0;
   }
@@ -248,8 +250,9 @@ void motorSet() {
     }
   }
   if (!braking) { */ // To stop the kart with all ultrasonics
-  if (usMed[0] > brake && lMed[0] > brake) { // To stop the kar with only front sensors
-    analogWrite(hsout, (int) (analogRead(hsin)*speedFactor + 320 - 300*speedFactor)*maxSpeed/4);
+  if (usMed[0] > brake && lMed[0] > brake) { // To stop the kart with only front sensors
+    analogWrite(hsout, (int) ((analogRead(hsin)-300)*speedFactor*maxSpeed + 350)*1.2/4);
+    // Serial.println(speedFactor);
     // Serial.println(analogRead(hsin));
   }
 }

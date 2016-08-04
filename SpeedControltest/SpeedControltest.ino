@@ -1,6 +1,6 @@
 int hsout = 11;
 int hsin = 0;
-float speedFactor = 1; // 1.2 mostly mirrors the input
+float speedFactor = .8; // 1.2 mostly mirrors the input
 int limit = 1.2; // Limit for the speed
 
 void setup() {
@@ -12,6 +12,6 @@ void setup() {
 }
 
 void loop() {
-  analogWrite(hsout, (int) analogRead(hsin)*speedFactor*limit/4+320-300*speedFactor);
+  analogWrite(hsout, (int) (analogRead(hsin)*speedFactor+350-300*speedFactor)*limit/4);
   Serial.println("HallEffect: " + String(analogRead(hsin), DEC) + "\t = " + String((int) ((float)analogRead(hsin)/1024*5000), DEC) + "mV\t Output: " + String(analogRead(2), DEC) + + " =\t" + String((int) ((float)analogRead(2)/1024*5000), DEC) + "mV");
 }
