@@ -27,20 +27,28 @@ long  us[usSize]; // Array of ultrasonic readings
 long usArr[usSize][avgCSize]; // Array of past us readings
 long usMed[usSize]; // Array of median ultrasonic readings
 
-int tooClose = 100; // Bypass the median calculation, so no delay when displaying the too close notification
-int brakeDist = 200; // Distance at which to start braking
+int tooClose = 200; // Bypass the median calculation, so no delay when displaying the too close notification
+int brakeDist = 100; // Distance at which to start braking
 
 // For the Hall Effect Sensor + Motor Control
 int hsout = 11;
 int hsin = 0;
 float speedFactor = 1.0; // multiplied by maxSpeed later on
-float maxSpeed = .5; // 1.2 mirrors original kart output
+float maxSpeed = .25; // 1.2 mirrors original kart output
+float prevSpeedFactor = 1.0;
 
 int buttonPin = 9;
 
 #include <Servo.h>
 Servo brakeServo;
 int brakePin = 12;
+
+int sensorCount = 0;
+
+int spd = 0;
+int prevSpd = 0;
+int ramp = 5;
+bool stopped = false;
 
 void setup() {
   Serial.begin(115200); //Opens serial connection at 115200bps. 
@@ -72,39 +80,29 @@ void setup() {
 
 void loop() {
   long startTime = millis();
-  readLid(); // Method to read LIDARs
-  /*Serial.print("Lidar \t");
-  Serial.print(millis()-startTime);
-  Serial.print("\t");*/
-  readUS(); // Method to read the values of the ultrasonic sensor
-  /*Serial.print("US \t");
-  Serial.print(millis()-startTime);
-  Serial.print("\t");*/
-  lMedCalc();
-  usMedCalc();
-  /*Serial.print("Median\t");
-  Serial.print(millis()-startTime);
-  Serial.println("\t");*/
+  readLid(sensorCount); // Method to read LIDARs
+  readUS(sensorCount); // Method to read the values of the ultrasonic sensor
+  lMedCalc(sensorCount);
+  usMedCalc(sensorCount);
   motorSet();
-  printValues(); // Method to print sensor values to serial
-  avgC = (avgC+1)%avgCSize;
+  if (sensorCount+1 == lSize) {
+    printValues(); // Method to print sensor values to serial
+    avgC = (avgC+1)%avgCSize;
+  }
   //delay(5);
   /*Serial.print("Loop: \t");
   Serial.println(millis()-startTime);*/
   //Serial.println(digitalRead(12));
+  sensorCount = (sensorCount + 1) % lSize;
 }
 
-void readLid() {
-  for (int i=0; i<lSize; i++) {
+void readLid(int i) {
     enableDisableSensor(lPins[i]);
     lid[i] = readLidar();
-  }
 }
 
-void readUS() {
-  for (int i=0; i<usSize; i++) {
+void readUS(int i) {
     us[i] = pulseIn(usPins[i], HIGH)/10; // Result in cm
-  }
 }
 
 void enableDisableSensor(int sensorPin){
@@ -210,8 +208,7 @@ int med5(int a0, int a1, int a2, int a3, int a4) { // super efficient median of 
   }
 }
 
-void usMedCalc() {
-  for (int i=0; i<usSize; i++) {
+void usMedCalc(int i) {
     usArr[i][avgC] = us[i];
     if (us[i] > tooClose) {
       usMed[i] = med5(usArr[i][0], usArr[i][1], usArr[i][2], usArr[i][3], usArr[i][4]);
@@ -219,11 +216,9 @@ void usMedCalc() {
     else {
       usMed[i] = us[i];
     }
-  }
 }
 
-void lMedCalc() {
-  for (int i=0; i<lSize; i++) {
+void lMedCalc(int i) {
     lArr[i][avgC] = lid[i];
     if (lid[i] > tooClose || lid[i] < 10) {
       lMed[i] = med5(lArr[i][0], lArr[i][1], lArr[i][2], lArr[i][3], lArr[i][4]);
@@ -231,7 +226,6 @@ void lMedCalc() {
     else {
       lMed[i] = lid[i];
     }
-  }
 }
 
 void printValues() {
@@ -253,33 +247,46 @@ void printValues() {
 
 void motorSet() {
   int serialVal = Serial.parseInt();
-  if (serialVal > 0) {
-    speedFactor = ((float) serialVal)/100.0;
+  if (usMed[0] < tooClose || lMed[0] < tooClose) {
+    speedFactor = .1;
   }
-  /* bool braking = false;
-  for (int i=0; i<lSize; i++) {
-    if (lMed[i] < brake) {
-      braking = true;
+  else {
+    if (serialVal > 1) {
+      if (serialVal > 120) {
+        serialVal = 120;
+      }
+      speedFactor = ((float) serialVal)/100.0;
+      stopped = false;
+    }
+    else {
+      speedFactor = prevSpeedFactor;
     }
   }
-  for (int i=0; i<usSize; i++) {
-    if (usMed[i] < brake) {
-      braking = true;
-    }
+  if (serialVal == 1) {
+    stopped = true;
+    brake();
+    return;
   }
-  if (!braking) { */ // To stop the kart with all ultrasonics
-  if (usMed[0] > brakeDist && lMed[0] > brakeDist && digitalRead(brakePin)) { // To stop the kart with only front sensors
-    analogWrite(hsout, (int) ((analogRead(hsin)-300)*speedFactor*maxSpeed + 350)*1.2/4);
+  if ((usMed[0] > brakeDist || usMed[0] == 0) && (lMed[0] > brakeDist || lMed[0] == 0) && digitalRead(brakePin) && !stopped) { // To stop the kart with only front sensors
+    spd = (int) ((analogRead(hsin)-300)*speedFactor*maxSpeed + 350)*1.2/4;
+    if (spd - prevSpd > ramp) {
+      spd = prevSpd + ramp;
+    }
+    analogWrite(hsout, spd);
     brakeServo.write(180);
     //Serial.println("not braking");
   }
   else {
     brake();
   }
+  prevSpd = spd;
+  if (speedFactor > .11) prevSpeedFactor = speedFactor;
 }
 
 void brake() {
   //Serial.println("braking");
+  spd = 0;
+  prevSpd = 0;
   brakeServo.write(0);
   analogWrite(hsout, 0);
 }
