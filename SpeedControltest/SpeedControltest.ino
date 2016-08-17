@@ -1,6 +1,6 @@
 int hsout = 11;
 int hsin = 0;
-float speedFactor = .8; // 1.2 mostly mirrors the input
+float speedFactor = 1; // 1.2 mostly mirrors the input
 int limit = 1.2; // Limit for the speed
 
 void setup() {

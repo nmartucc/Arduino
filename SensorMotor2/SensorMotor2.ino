@@ -34,7 +34,7 @@ int brakeDist = 100; // Distance at which to start braking
 int hsout = 11;
 int hsin = 0;
 float speedFactor = 1.0; // multiplied by maxSpeed later on
-float maxSpeed = .25; // 1.2 mirrors original kart output
+float maxSpeed = .2; // 1.2 mirrors original kart output
 float prevSpeedFactor = 1.0;
 
 int buttonPin = 9;
@@ -47,7 +47,7 @@ int sensorCount = 0;
 
 int spd = 0;
 int prevSpd = 0;
-int ramp = 5;
+int ramp = 2;
 bool stopped = false;
 
 void setup() {
@@ -55,7 +55,7 @@ void setup() {
   Serial.setTimeout(5); //Sets the timeout at 10 ms so it doesn't disrupt other code
   I2c.begin(); // Opens & joins the irc bus as master
   delay(100); // Waits to make sure everything is powered up before sending or receiving data  
-  I2c.timeOut(5); // Sets a timeout to ensure no locking up of sketch if I2C communication fails
+  I2c.timeOut(10); // Sets a timeout to ensure no locking up of sketch if I2C communication fails
 
   for (int i = 0; i < lSize; i++){
     pinMode(lPins[i], OUTPUT); // Pin to [i] LIDAR-Lite Power Enable line
@@ -76,13 +76,14 @@ void setup() {
   pinMode(brakePin, INPUT);
 
   brakeServo.attach(10);
+  brakeServo.write(180);
 }
 
 void loop() {
   long startTime = millis();
-  readLid(sensorCount); // Method to read LIDARs
+  //readLid(sensorCount); // Method to read LIDARs
   readUS(sensorCount); // Method to read the values of the ultrasonic sensor
-  lMedCalc(sensorCount);
+  //lMedCalc(sensorCount);
   usMedCalc(sensorCount);
   motorSet();
   if (sensorCount+1 == lSize) {
@@ -247,7 +248,7 @@ void printValues() {
 
 void motorSet() {
   int serialVal = Serial.parseInt();
-  if (usMed[0] < tooClose || lMed[0] < tooClose) {
+  if (usMed[0] < tooClose || ((lMed[0] < tooClose) && (lMed[0] != 0))) {
     speedFactor = .1;
   }
   else {
@@ -267,20 +268,26 @@ void motorSet() {
     brake();
     return;
   }
+  /*Serial.print(analogRead(0));
+  Serial.print("\t");
+  Serial.println(analogRead(2));*/
   if ((usMed[0] > brakeDist || usMed[0] == 0) && (lMed[0] > brakeDist || lMed[0] == 0) && digitalRead(brakePin) && !stopped) { // To stop the kart with only front sensors
-    spd = (int) ((analogRead(hsin)-300)*speedFactor*maxSpeed + 350)*1.2/4;
+    spd = (int) ((analogRead(hsin)-300)*speedFactor*maxSpeed + 350)*1.4/4;
+    /*if (prevSpd == 0) prevSpd = 85;
     if (spd - prevSpd > ramp) {
       spd = prevSpd + ramp;
-    }
+    }*/
     analogWrite(hsout, spd);
     brakeServo.write(180);
-    //Serial.println("not braking");
+    /*Serial.println(spd);
+    Serial.println(analogRead(0));
+    Serial.println("not braking");*/
   }
   else {
     brake();
   }
   prevSpd = spd;
-  if (speedFactor > .11) prevSpeedFactor = speedFactor;
+  if (speedFactor > .101) prevSpeedFactor = speedFactor;
 }
 
 void brake() {
